@@ -40,3 +40,6 @@ vignettes/*.pdf
 
 # shiny_app
 ShinyApp/*
+
+# Shiny token, see https://shiny.rstudio.com/articles/shinyapps.html
+rsconnect/
