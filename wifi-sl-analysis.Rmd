@@ -1,0 +1,889 @@
+---
+title: "LUMAS-analysis"
+author: "Josh White"
+date: "8/09/2020"
+output: 
+    html_document:
+        fig_retina: 1
+          
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, cache = TRUE, message = FALSE, dpi = 300)
+                      
+library(tidyverse) # to read, maniuplate and graph data
+
+# for modeling
+library(lme4) # for frequentist models
+library(brms) # for Bayesian models
+library(caret) # for cross validation 
+library(glmnet) # for regularisation (ElasticNet)
+library(performance)
+
+library(psych) # for logit function to get ROPE value
+library(bayestestR) # for % in ROPE calculations
+
+#library(PerformanceAnalytics)
+
+# for visualisation
+library(ggpubr)
+library(ggsci) # for colour schemes
+library(ggthemes)  # for colour schemes
+library(ggsignif) # for significance bars on graphs. 
+library(tidybayes) # for using and graphing mcmc draws in tidy format
+library(bayesplot) # for plotting diagnostic graphs. 
+library(tidytext) # for function to order factors within facets 
+library(showtext) # to use custom fonts 
+
+# set base theme
+theme_set(theme_pubr())
+
+# install adone myriad font
+font_paths("C:\\Users\\joshu\\AppData\\Local\\Microsoft\\Windows\\Fonts")
+
+font_add("Myriad Pro",
+       regular = "MyriadPro-Regular.otf",
+       bold = "MyriadPro-Bold.otf",
+       italic = "MyriadPro-It.otf" ,
+       bolditalic = "MyriadPro-BoldIt.otf")
+
+set.seed(87643)
+
+```
+
+# Introductory Steps
+
+## Load Packages and set seed for reproducibility
+
+```{r load-packages, eval = FALSE}
+library(tidyverse)
+library(readr)
+library(lme4)
+library(lmerTest)
+library(brms)
+library(skimr)
+library(qpcR) # for akaike.weights function
+library(lubridate)
+library(ltm)
+library(psych)
+library(PerformanceAnalytics)
+library(corrplot)
+library(Hmisc)
+library(purrr)
+library(performance) # for icc function
+library(caret) # for confusion matrix
+library(pracma) # for fminsearch
+library(bayesplot)
+
+library(likert)
+library(ggthemes)
+library(ggpubr)
+library(ggsci)
+library(tidybayes)
+library(modelr)
+library(tidytext) # for ordering within facets
+
+theme_set(theme_pubr())
+
+# install myriad
+font_paths("C:\\Users\\joshu\\AppData\\Local\\Microsoft\\Windows\\Fonts")
+
+font_add("Myriad Pro",
+       regular = "MyriadPro-Regular.otf",
+        bold = "MyriadPro-Bold.otf",
+         italic = "MyriadPro-It.otf" ,
+         bolditalic = "MyriadPro-BoldIt.otf")
+
+set.seed(87643)
+```
+
+## Import Data
+
+```{r import-data, warning = FALSE}
+# load data
+d <- read_csv("sldata.csv")
+
+# manipulate variable types 
+d <- d %>% mutate(
+  
+  #make new variable for whether attention check passed
+  check_pass = (scenario == scenario_check),
+  
+  #make is_acceptable logical
+  is_acceptable = as.logical(is_acceptable),
+  
+  # make variables factors
+  ResponseId = factor(ResponseId),
+  
+  scenario = factor(scenario,
+    levels = 1:11, 
+    labels = c("Work Records", "Memory for Where",
+               "Serving you Better", "Safe Campus",
+               "Student Well-being Project",
+               "Project Move", "Project TRIIBE",
+               "Project QueueSense", "Project Fluloc",
+               "Project Precinct Change Management",
+               "Academic Performance")
+  ),
+  
+  gender = factor(gender,
+    levels = 1:4,
+    labels = c("Male", "Female", "Other", "Prefer not to say")
+  ),
+  
+  rel_to_unimelb = factor(rel_to_unimelb,
+      levels = 1:6,
+      labels = c("Undergraduate", "Postgraduate", "Academic employee",
+                 "Non-academic employee", "Other employee", "Other")
+  ),
+  
+  education = factor(education,
+     levels = 1:10,
+     labels = c("Some high school", "Completed high school",
+                "Some trade school", "Completed trade school", 
+                "Some undergrad", "Completed undergrad",
+                "Some postgrad", "Completed postgrad", 
+                "Some doctoral", "Completed doctoral")
+  )
+)
+  
+```
+
+## remove failed participants
+
+```{r remove-participants}
+
+# Only get participants that passed attention check
+failed_attcheck <- d %>% filter(check_pass == FALSE) %>% dplyr::select(ResponseId) %>% unique()
+failed_attcheck
+
+d_fail <- d %>% semi_join(failed_attcheck, by = "ResponseId")
+d_pass <- d %>% anti_join(failed_attcheck, by = "ResponseId")
+```
+
+# Analysis
+
+## Descriptives 
+
+```{r decriptives, show.text = TRUE, dpi = 300, fig.height = 2.5, fig.width = 5}
+
+# make long data frame
+d_pass_long <- d_pass %>% gather(key = "dimension", value = "rating", decline_difficulty:respect_for_privacy)
+
+d_pass_long$dimension <- factor(d_pass_long$dimension, 
+                                labels = c("Decline difficulty", "Disproportionality",
+                                           "Data control", "Participant benefit",
+                                           "Private benefit", "Public benefit",
+                                           "Respect for privacy", "Risk of harm",
+                                           "Data security", "Sensitivity",
+                                           "Trust"))
+
+### ACCEPTABILITY BY SCENARIO ###
+
+# get grand mean acceptability and SD
+summacc <- d_pass_long %>% group_by(scenario) %>% summarise(PropAccept = mean(is_acceptable)) %>% 
+  summarise(Grandmean = mean(PropAccept),
+                      SD = sd(PropAccept))
+summacc
+
+
+## Graph ##
+
+# get dataframe for scenario and n for each one, and get ordering of factors to match graph
+d_pass_n <- d_pass %>% dplyr::select(scenario) %>% group_by(scenario) %>% mutate(n = n()) %>% unique() 
+d_pass_n$n <- paste0("n = ", d_pass_n$n)
+order <- levels(fct_reorder(d_pass_long$scenario, as.numeric(d_pass_long$is_acceptable), .fun = "mean", .desc = TRUE))
+d_pass_n$xpos <- match(d_pass_n$scenario, order)
+
+## set text size - https://stackoverflow.com/questions/25061822/ggplot-geom-text-font-size-control
+theme.size <- 8
+geom.text.size <- theme.size / (14/5)
+
+#open showtext
+showtext_auto()
+showtext_opts(dpi = 300)
+
+#plot
+d_pass_long %>% ggplot(aes(x = fct_reorder(scenario, as.numeric(is_acceptable), .fun = "mean", .desc = TRUE),
+                           y = as.numeric(is_acceptable), fill = scenario, colour = scenario)) +
+  scale_fill_d3(palette = "category20c") +
+  scale_colour_d3(palette = "category20c") +
+  stat_summary(geom = "bar", fun = mean, alpha = 0.5) + 
+  stat_summary(geom = "errorbar", fun.data = mean_se, position = "dodge", width = 0.5, colour = "black") +
+  geom_text(aes(x = xpos, label = n), y = 0.075, data = d_pass_n, col = "black", size = geom.text.size) +
+  xlab("") +
+  theme_pubr() +
+  theme(legend.position = "none",
+        text = element_text(family = "Myriad Pro", size = theme.size)) +
+  scale_y_continuous(name = "Proportion Acceptable",limits = c(0, 1))+
+  coord_flip()
+ggsave("acceptbyscen.png", width = 5, height = 2.5, units = "in", dpi = 300)
+```
+
+```{r graph-privdim, fig.height = 9, fig.width = 7.3}
+### GRAPH PRIVACY DIMENSION RATINGS ###
+
+# first get labels vector
+facet_labels <- c(`Decline difficulty` = "Decline difficulty\n(0 = ‘Extremely easy’\n5 = ‘Extremely difficult’)" ,
+                 `Private benefit` = "Private benefit\n(0 = ‘Not at all’\n5 = ‘Extremely’)" , 
+                 `Participant benefit` = "Participant benefit\n(0 = ‘Not at all’\n5 = ‘Extremely’)" ,
+                 `Public benefit` = "Public benefit\n(0 = ‘Not at all’\n5 = ‘Extremely’)", 
+                 `Disproportionality` = "Disproportionality\n(0 = ‘Only necessary data collected’\n5 = ‘Vast unnecessary data collected’)", 
+                 `Sensitivity` = "Sensitivity\n(0 = ‘Not at all’\n5 = ‘Extremely’)" ,
+                 `Risk of harm` = "Risk of harm\n(0 = ‘Extremely low risk of harm’\n5 = ‘Extremely high risk of harm’)", 
+                 `Trust` = "Trust\n(0 = ‘Not at all’\n5 = ‘Extremely’)" , 
+                 `Data security` = "Data security\n(0 = ‘Not at all secure’\n5 = ‘Extremely secure’)", 
+                 `Data control` = "Data control\n(0 = ‘No control at all’\n5 = ‘Complete control’)", 
+                 `Respect for privacy` = "Respect for privacy\n(0 = ‘Not at all’\n5 = ‘Extremely’)")
+
+# boxplot of privcy dimension ratings by each scenario
+d_pass_long %>% ggplot(aes(x = reorder_within(scenario, rating, dimension), y = rating, 
+                           colour = scenario, shape = scenario, group = interaction(scenario, dimension))) +
+  geom_boxplot(outlier.size = 0.75, size = 0.75, alpha = 0.5) +
+  stat_summary(geom = "point", fun = mean, size = 3.5, col = "black") +
+  coord_flip() + 
+  scale_colour_d3(palette = "category20c") +
+  scale_shape_manual(values = c("W", "M", "S", "C", "s", "m", "T", "Q", "F", "P", "A")) +
+  theme_pubr() + 
+  theme(axis.ticks.y = element_blank(), 
+        text = element_text(family = "Myriad Pro"),
+        axis.text.y = element_blank(),
+        panel.grid.major.x = element_line(),
+        legend.title.align = 0.5,
+        legend.text = element_text(size = 9),
+        strip.text = element_text(size = 9),
+        strip.background = element_rect(fill = "white"),
+        legend.position = "top") +
+  guides(colour = guide_legend(title.position = "top", title = "Scenario"),
+         shape = guide_legend(title.position = "top", title = "Scenario"),
+         boxplot = guide_legend(title.position = "top", title = "Scenario")) +
+  scale_x_reordered() +
+  facet_wrap(~dimension, ncol = 3, scales = "free_y", labeller = as_labeller(facet_labels)) +
+  xlab("") +
+  ylab("Likert rating (0-5)")
+ggsave("dimbyscenbox.png", width = 7.3, height = 9, units = "in", dpi = 300)
+
+
+# boxplot of privacy ratings for each scenario by ratings
+d_pass_long %>% ggplot(aes(x = reorder_within(scenario, rating, dimension), y = rating, 
+                           colour = dimension, shape = dimension, group = interaction(scenario, dimension))) +
+  geom_boxplot(outlier.size = 0.75, size = 0.75, alpha = 0.5) +
+  stat_summary(geom = "point", fun = mean, size = 3.5, col = "black") +
+  coord_flip() + 
+  scale_colour_d3(palette = "category20c") +
+  scale_shape_manual(values = c("D", "d", "O", "P", "p", "B", "R", "r", "S", "s", "T")) +
+  theme_pubr() + 
+  theme(axis.ticks.y = element_blank(), 
+        text = element_text(family = "Myriad Pro"),
+        axis.text.y = element_blank(),
+        panel.grid.major.x = element_line(),
+        legend.title.align = 0.5,
+        legend.text = element_text(size = 9),
+        strip.text = element_text(size = 9),
+        strip.background = element_rect(fill = "white"),
+        legend.position = "top") +
+  guides(colour = guide_legend(title.position = "top", title = "Privacy Dimension"),
+         shape = guide_legend(title.position = "top", title = "Privacy Dimension"),
+         boxplot = guide_legend(title.position = "top", title = "Privacy Dimension")) +
+  scale_x_reordered() +
+  facet_wrap(~scenario, ncol = 3, scales = "free_y") +
+  xlab("") +
+  ylab("Likert rating (0-5)")
+ggsave("scenbydimbox.png", width = 7.3, height = 9, units = "in", dpi = 300)
+
+#close showtext
+showtext_auto(FALSE)
+
+```
+
+## Demographics
+
+```{r demo-data, dpi = 300}
+
+#create demographic dataframe
+demo_df <- d %>% dplyr::select(ResponseId, age:education) %>% # save only demographic data
+                anti_join(failed_attcheck, by = "ResponseId") # remove failed attention check
+
+demo_df <- demo_df[rep(c(TRUE, FALSE, FALSE), 287), ] # remove duplicates
+
+
+
+# REL TO UNIMELB
+  # unimelb population data for comparison (from 2019 annual report)
+  unimelb_data <- data.frame(rel_to_unimelb = factor(c("Undergraduate", "Postgraduate", "Academic employee", 
+                                                "Non-academic employee", "Other employee", "Other")),
+                             n = c(27682, 27032, 4910, 4470,  0, 0))
+  
+  # manipulate df to compare sample to population
+  counts <- demo_df %>% count(rel_to_unimelb)
+  counts <- bind_rows("Sample" = counts, "University Population" = unimelb_data, .id = "source")
+  counts <- counts %>% group_by(source) %>% mutate(percentage = n/sum(n))
+   
+  # graph
+relunimelb <- counts %>% ggplot(aes(x = rel_to_unimelb, y = percentage, fill = source)) + 
+    geom_bar(stat = "identity", position = "dodge", col = "black", alpha = .60) +
+    scale_fill_fivethirtyeight() +
+    ylab("Proportion") +
+    xlab("Relationship to UniMelb") +
+    theme_pubr() + 
+    theme(text = element_text(family = "Myriad Pro", size = 8),
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      legend.title = element_blank(),
+      legend.position = c(.75, .8),
+      legend.key.size = unit(.5, "cm")) 
+ggsave("demo-relunimelb.png", width = 3.5, height = 3.5, units = "in", dpi = 300)
+```
+
+```{r descbydem, fig.height = 7.5, fig.width = 5}
+                                                  
+## DESCRIPTIVES BY DEMOGRAPHICS ##
+
+#get age bins for analysis
+d_pass <- d_pass %>% 
+  mutate(age_group = cut(age, 
+    breaks = c(16.5, 24.5, 34.5, 44.5, 54.5, 64.5), 
+    labels = c("17-24","25-34", "35-44", "45-54", "55-64")))
+
+### get datset with proportion of acceptance for each participant (0, .33, .66, 1)
+meanaccept <- d_pass %>% group_by(ResponseId) %>% summarise(mean = mean(is_acceptable),
+                                              age = age[1],
+                                              age_group = age_group[1],
+                                              gender = gender[1],
+                                              rel_to_unimelb = rel_to_unimelb[1],
+                                              education = education[1])
+
+### ANOVAS to test whether proportion acceptance are different by demographic categories
+lm(mean ~ age, data = meanaccept) %>% summary() # age, continuous
+lm(mean ~ age_group, data = meanaccept) %>% aov %>% summary() # age, binned
+lm(mean ~ gender, data = meanaccept) %>% aov %>% summary()  # gender
+lm(mean ~ rel_to_unimelb, data = meanaccept) %>% aov %>% summary() # relationship to unimelb
+lm(mean ~ education, data = meanaccept) %>% aov %>% summary() #eductaional attainment
+
+
+### GRAPHS OF PROPTION ACCEPTANCE BY DEMOGRAPHIC VARIABLES ###
+
+#set global options for graphs
+fillcol <- "lightblue"
+ypos <- c(0.925) #ypos for ggsignif
+
+#open 
+showtext_auto()
+showtext_opts(dpi = 300)
+
+#GENDER
+gender_acc <- meanaccept %>% drop_na(gender) %>% ggplot(aes(x = gender, y = mean)) + 
+  stat_summary(geom = "bar", fun = mean, col = "black", fill = fillcol) +
+  stat_summary(geom = "errorbar", fun.data = mean_se, col = "black", width = .5) +
+  #EnvStats::stat_n_text(y.pos = 0.1, size = geom.text.size, family = "Myriad Pro") +
+  stat_summary(fun = function(x){return(0.1)}, fun.max = length,
+               geom = "text", aes(label = ..max..), size = geom.text.size)   +
+  theme_pubr() +
+  scale_y_continuous(limits = c(0, 1)) +
+  ylab("Mean\nproportion acceptance") +
+  xlab("Gender") +
+  ggsignif::stat_signif(comparisons = list(c("Male", "Prefer not to say")),
+                        annotations = c("N.S."),
+                        y_position = ypos,
+                        textsize = geom.text.size, vjust = 0) +
+  theme(text = element_text(family = "Myriad Pro", size = 8)) 
+ggsave("demoacc-gen.png", width = 2.5, height = 2.5, units = "in", dpi = 300)
+
+
+#EDUCATION
+edu_acc <- meanaccept %>% drop_na(education) %>%
+  ggplot(aes(x = education, y = mean)) + 
+  stat_summary(geom = "bar", fun = mean, col = "black", fill = fillcol) + 
+  stat_summary(geom = "errorbar", fun.data = mean_se, alpha = 0.8, col = "black", width = .5) +
+  #geom_jitter(height = 0.05, alpha = 0.2) +
+  #EnvStats::stat_n_text(y.pos = 0.1, size = geom.text.size, family = "Myriad Pro") +
+  stat_summary(fun = function(x){return(0.1)}, fun.max = length,
+               geom = "text", aes(label = ..max..), size = geom.text.size)   +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_pubr() +
+  ylab("Mean\nproportion acceptance") +
+  xlab("Highest educational attainment") +
+  theme(text = element_text(family = "Myriad Pro", size = 8),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggsignif::stat_signif(comparisons = list(c(1, 9)),
+                        annotations = c("N.S."),
+                        y_position = ypos,
+                        textsize = geom.text.size, vjust = 0)
+ggsave("demoacc-edu.png", width = 2.5, height = 2.5, units = "in", dpi = 300)
+
+#AGE
+age_acc <- meanaccept %>% drop_na(age_group) %>% ggplot(aes(x = age_group, y = mean)) + 
+  stat_summary(geom = "bar", fun = mean, col = "black", fill = fillcol) +
+  stat_summary(geom = "errorbar", fun.data = mean_se, col = "black", width = .5) +
+  #EnvStats::stat_n_text(y.pos = 0.1, size = geom.text.size, family = "Myriad Pro") +
+  stat_summary(fun = function(x){return(0.1)}, fun.max = length,
+               geom = "text", aes(label = ..max..), size = geom.text.size)   +
+  #geom_jitter(height = 0.05, alpha = 0.2) +
+  #scale_y_continuous(sec.axis = sec_axis(~ ., name = "Data use acceptable?", breaks = c(0,1), labels = c("No", "Yes"))) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_pubr() +
+  theme(text = element_text(family = "Myriad Pro", size = 8)) +
+  xlab("Age group") +
+  ylab("Mean\nproportion acceptance")  +
+  ggsignif::stat_signif(comparisons = list(c(1, 5)),
+                        annotations = c("N.S."),
+                        y_position = ypos,
+                        textsize = geom.text.size, vjust = 0)
+ggsave("demoacc-age.png", width = 2.5, height = 2.5, units = "in", dpi = 300)
+
+relunimelb_acc <- meanaccept %>% drop_na(rel_to_unimelb) %>%
+  #filter(rel_to_unimelb != "Other employee" & rel_to_unimelb != "Other") %>% 
+  ggplot(aes(x = rel_to_unimelb, y = mean)) + 
+    stat_summary(geom = "bar", position = "dodge", fun = "mean", col = "black", fill = fillcol) +
+    stat_summary(geom = "errorbar", fun.data = mean_se, col = "black", width = 0.5) +
+    #EnvStats::stat_n_text(y.pos = 0.1, size = geom.text.size, family = "Myriad Pro") +
+    stat_summary(fun = function(x){return(0.1)}, fun.max = length,
+               geom = "text", aes(label = ..max..), size = geom.text.size)   +
+    ylab("Mean\nproportion acceptancee") +
+    xlab("Relationship to UniMelb") +
+    scale_y_continuous(limits = c(0, 1)) +
+    theme_pubr() + 
+    theme(text = element_text(family = "Myriad Pro", size = 8),
+      axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.title = element_blank())  +
+    ggsignif::stat_signif(comparisons = list(c(1, 6)),
+                        annotations = c("N.S."),
+                        y_position = ypos,
+                        textsize = geom.text.size, vjust = 0)
+ggsave("demoacc-reltounimelb.png", width = 2.5, height = 2.5, units = "in", dpi = 300)
+
+#combine into one graph
+top <- cowplot::plot_grid(age_acc, gender_acc, edu_acc, relunimelb_acc, ncol = 2, labels = "AUTO", vjust = 1.01)
+bot <- cowplot::plot_grid(NULL, relunimelb, NULL, ncol = 3, labels = c("", "E", ""), rel_widths = c(1,2,1), vjust = 1.01) 
+cowplot::plot_grid(top, bot, ncol = 1, rel_heights = c(2, 1))
+ggsave("demoBIG.png", width = 5, height = 7.5, units = "in", dpi = 300)
+
+#showtextoff
+showtext_auto(FALSE)
+
+```
+
+## DESCRIPTIVE MODEL - Bayesian Mixed Effects Logistic Regression 
+
+### Model Prep
+
+```{r models-prep}
+
+## first get correlation matrix
+d_pass %>% dplyr::select(age, decline_difficulty:respect_for_privacy) %>% 
+  cor(use = "pairwise.complete.obs") %>% 
+  corrplot::corrplot(type = "upper", method = "number",
+                     tl.col = "black", tl.srt = 45,
+                     sig.level = 0.01, insig = "blank", number.cex = .70)
+
+
+### pre-prepare formulas ###
+main_effects <- paste0(colnames(d_pass)[5:15], collapse = " + ")
+random_effects <- "(1|scenario) + (1|ResponseId)"
+interactions <- "private_benefit*participant_benefit*public_benefit + risk_of_harm:decline_difficulty + risk_of_harm:ongoing_control + 
+                 security:sensitivity + sensitivity:ongoing_control + trust:sensitivity + trust:risk_of_harm + trust:security"
+
+formula_noint <- paste0("is_acceptable ~ ", main_effects, " + ", random_effects)
+formula_int <- paste0("is_acceptable ~ ", main_effects, " + ", interactions, " + ", random_effects)
+
+```
+
+### Run models, compare and evaluate
+
+```{r MELR-bayes}
+set.seed(87643)
+
+### FIT MODELS ###
+
+# MOD1: no interactions
+mod_noint <- brm(
+  
+  #set formula, data and conditional distribution
+  formula_noint, 
+  data = d_pass, 
+  family = "bernoulli", 
+  
+  #set priors
+  prior = prior(cauchy(0, 2.5), class = "Intercept") + 
+          prior(double_exponential(0, .20), class = "b") +
+          prior(cauchy(0, 2.5), class = "sd"), 
+   
+  #set options for sampler
+  chains = 4, 
+  iter = 2000, 
+  warmup = 1000, 
+  control = list(adapt_delta = 0.8), 
+   
+  #supress output updates
+  refresh = 0, open_progress = FALSE
+)
+
+summary(mod_noint)
+
+# MOD2: with interactions
+mod_int <- brm(
+  
+  #set formula, data and conditional distribution
+  formula_int, 
+  data = d_pass, 
+  family = "bernoulli", 
+  
+  #set priors
+  prior = prior(cauchy(0, 2.5), class = "Intercept") + 
+          prior(double_exponential(0, .20), class = "b") +
+          prior(cauchy(0, 2.5), class = "sd"), 
+   
+  #set options for sampler
+  chains = 4, 
+  iter = 2000, 
+  warmup = 1000, 
+  control = list(adapt_delta = 0.8),
+   
+  #supress output updates
+  refresh = 0, open_progress = FALSE
+)
+
+summary(mod_int)
+  
+### COMPARE MODEOLS ###
+
+#get Nakagawa's R  for both models
+(nakr2_noint <- r2(mod_noint)) 
+(nakr2_int <- r2(mod_int))
+
+# add loo to model objects
+mod_noint <- add_criterion(mod_noint, "loo") 
+mod_int <- add_criterion(mod_int, "loo") 
+str(mod_noint)
+# compare stats
+bayes.comp.loo <- loo_compare(mod_noint, mod_int, criterion = "loo") # compare models
+
+# show comparison stats
+cbind(bayes.comp.loo) 
+
+## get Bayes and loo_R2
+mods <- list(mod_noint, mod_int)
+
+(mods_loo <- map(mods, function(x) {x$criteria$loo})) # all paraeto k estimates are OK, leaving LOO-CV as the best comparison.
+
+```
+
+## Analysing effects
+
+``` {r fixedeffects}
+
+## Analyse fixed effects
+
+# get mode + HDI for each parameter
+fixedsum <- mod_noint %>% 
+  gather_draws(`(b_.*)|(sd_.*)|(r_s.*)`, regex = TRUE) %>% mode_hdi(.width = .89) %>%
+  mutate(exp = exp(.value))
+
+fixedsum %>% print(n = Inf)
+
+## Get ROPE (Range of Practical Equivalence)
+p <- mean(d_pass$is_acceptable)
+neglig <- .05 # a 5% change over range of variables is practically relevant. 
+ROPEpos <- (logit(p + neglig) - logit(p - neglig))/5 
+ROPEpos
+
+# get Percentage of mode + 89% HDI in ROPE
+rope_perc <- rope(mod_noint, range = c(-ROPEpos, ROPEpos)) %>%
+  dplyr::select(Parameter, ROPE_Percentage) %>% 
+  data.frame() %>% 
+  filter(Parameter != "b_Intercept") %>% 
+  mutate(ROPE_Percentage = paste0(round(as.numeric(ROPE_Percentage), 4) *100, "%"))
+
+rope_perc
+
+## GRAPH FIXED EFFECT POSTERIORS ##
+
+showtext_auto()
+showtext_opts(dpi = 300)
+
+## set text size - https://stackoverflow.com/questions/25061822/ggplot-geom-text-font-size-control
+theme.size <- 8
+geom.text.size <- theme.size / (14/5)
+
+## get posteriors generally
+postINT <- mod_noint %>% 
+  gather_draws(`b_.*`, regex = TRUE) %>% 
+  filter(.variable != "b_Intercept") %>%
+  ggplot(aes(y = fct_reorder(.variable, .value, .fun = "mean", .desc = TRUE), 
+             x = .value)) +
+  stat_slab(fill = "lightblue", alpha = 1) +
+  stat_pointintervalh(point_interval = mode_hdi, .width = c(.89), 
+                      aes(col = stat(xmax > -.098 & xmin < .098)), size = 1) +
+  geom_vline(xintercept = c(-.098, .098), linetype = "dashed") +
+  scale_colour_manual(values = c("black", "gray")) +
+  xlab("Parameter values") +
+  ylab("Fixed Parameters") +
+  #annotate("text", x=0, y=1, label= "ROPE")  +
+  theme_pubr() +
+  theme(legend.position = "none",
+        text = element_text(family = "Myriad Pro", size = 8)) +
+  scale_y_discrete(label = rev(c("Risk of harm", "Sensitivity", "Disproprtionality",
+                             "Decline difficulty", "Private benefit", "Data security",
+                             "Public benefit" ,"Ongoing data control", "Participant benefit",
+                             "Trust", "Respect for privacy")))
+  #geom_text(aes(x = 0.005, y = Parameter, label = ROPE_Percentage), data = rope_perc, vjust = -.5) #- to add percentage in ROPE to graph
+postINT
+ggsave("posteriorsINT.png", width = 3.5, height = 3.5, units = "in", dpi = 300)
+
+## GRAPH RANDOM EFFECT POSTERIORS ##
+
+##scenario
+scens.alph <- sort(c("Work Records", "Memory for Where","Serving you Better", "Safe Campus",
+           "Student Well-being Project", "Project Move", "Project TRIIBE",
+           "Project QueueSense", "Project Fluloc","Project Precinct Change Management",
+            "Academic Performance"))
+
+randscen <- mod_noint %>%
+  gather_draws(r_scenario[scenario, term]) %>% 
+  ungroup() %>%
+  mutate(scenario = factor(scenario, labels = scens.alph)) %>%
+  group_by(scenario) %>%
+  ggplot(aes(x = .value, y = fct_reorder(scenario, .value, .fun = mean, .desc = TRUE))) +
+  ylab("Scenario") +
+  xlab("Value") +
+  stat_halfeyeh(point_interval = "mode_hdi", .width = c(.66, .89),
+                fill = "lightblue", alpha = 1, col = "black", size = 1) +
+  theme_pubr() +
+  theme(text = element_text(family = "Myriad Pro", size = 8)) +
+  geom_vline(xintercept = 0, linetype = "dashed") 
+ggsave("randposteriorsscen.png", width = 5, height = 5, units = "in", dpi = 300)
+
+## Participant
+randpart <- mod_noint %>%
+  gather_draws(r_ResponseId[participant, term]) %>% 
+  ggplot(aes(x = .value, y = fct_reorder(participant, .value, .fun = mean, .desc = TRUE))) +
+  ylab("Participant") +
+  xlab("Value") +
+  stat_pointinterval(point_interval = "mode_hdi", .width = c(.89),
+                     alpha = .75, col = "lightblue", size = 0.125, point_colour = "red") +
+  stat_summary(fun = "mean",
+                     alpha = .75, col = "black", size = 0.125) +
+  theme_pubr() +
+  theme(text = element_text(family = "Myriad Pro", size = 8),
+        axis.text.y = element_blank()) +
+  geom_vline(xintercept = 0, linetype = "dashed") 
+ggsave("randposteriorspart.png", width = 5, height = 9, units = "in", dpi = 300)
+  
+# JOIN GRAPHs together 
+cowplot::plot_grid(randscen, randpart, ncol = 2, rel_widths = c(3, 2), labels = 'AUTO', hjust = 0)
+ggsave("randCOMB.png", width = 7, height = 5, units = "in", dpi = 300)
+
+#turn off showtext
+showtext_auto(FALSE)
+
+```
+
+## Model diagnostics
+
+### Traceplots, rhat, ESS etc. 
+
+Analysis of various diagnostic plots show that: 
+
+- the mcmc draws are accurately sampling the posterior. 
+- the chains all converge will all Rhat's very close to 1. 
+- the effective sample size for each parameter was acceptable (all above the rule of thumb of 0.1)
+- the bivariate distributions show no parameters that are 'trading off' in their parameter values
+- autocorrelation remains low, with the exception of the sd parameters (this is refelcted in smaller ESS)
+
+For more informatoin on these diagnostics see https://mc-stan.org/bayesplot/articles/visual-mcmc-diagnostics.html
+
+```{r diagnostics}
+#get nuts information and log_posterior info
+mod_np <- nuts_params(mod_noint)
+mod_lp <- log_posterior(mod_noint)
+
+# nuts sampling diagnostics
+mcmc_nuts_divergence(mod_np, mod_lp)
+mcmc_nuts_acceptance(mod_np, mod_lp)
+mcmc_nuts_energy(mod_np, mod_lp)
+mcmc_nuts_stepsize(mod_np, mod_lp)
+mcmc_nuts_treedepth(mod_np, mod_lp)
+
+# check bivariate distributions of parameters with high correlations
+mcmc_pairs(mod_noint, pars = c("b_sensitivity", "b_risk_of_harm", "b_trust", "b_security", "b_respect_for_privacy"))
+
+#check parameters in each iteration (one line per iteration) to check convergence and see any other patterns
+mcmc_parcoord(mod_noint, pars = vars(b_Intercept:sd_scenario__Intercept)) + xaxis_text(angle = 90, hjust = 1, vjust = 0.00)
+
+# rhat
+mcmc_rhat(rhat(mod_noint))
+mcmc_rhat_hist(rhat(mod_noint))
+
+# Effective sample size ratio
+mcmc_neff(neff_ratio(mod_noint))
+mcmc_neff_hist(neff_ratio(mod_noint))
+
+# autocorrelation
+mcmc_acf(mod_noint, pars = vars(b_Intercept:b_sensitivity) ) + facet_text(angle = 60, hjust = 0, vjust = 0.00)
+mcmc_acf(mod_noint, pars = vars(b_risk_of_harm:sd_scenario__Intercept))  + facet_text(angle = 75, hjust = 0, vjust = 0.00)
+#sd paramaters struggling with autocorrelation (explains their lower ess measures)
+
+
+```
+
+### Posterior Predictive Checks
+
+Posterior predictive checks show the model is well specified. 
+
+- The data mean acceptability is central in the mean acceptability distribution from PPC draws, both when grouped by scenario and when combined.
+- The acceptability standard deviation from the data is central in the acceptability standard deviation distribution from PPC draws, both when grouped by scenario and when combined.
+- The data mean acceptability of each scenario is similar to that drawn from the PPC distribution (combining all PPC draws to a grand mean per scenario). 
+
+``` {r ppc, fig.width = 7, fig.height = 7}
+### PPC Checks treating each PPC draw as a sub-sample and calculating test statistic thereof ###
+
+## combined
+
+pp_check(mod_noint, type = "stat", stat = mean) #mean
+pp_check(mod_noint, type = "stat", stat = sd) #sd
+
+## Groupe by scenario
+
+# define y and yrep
+y <- as.numeric(d_pass$is_acceptable)
+yrep <- posterior_predict(mod_noint)
+
+# compare y mean and yrep mean sampling distribution
+ppc_stat_grouped(y, yrep, stat = "mean", group = d_pass$scenario)
+
+# compare y sd and yrep sd sampling distribution
+ppc_stat_grouped(y, yrep, stat = "sd", group = d_pass$scenario)
+
+
+### MAIN PPC GRAPH ###
+## treating all ppc draws as one large sample ##
+## compares data, PPC and posterior distribution of conditional (i.e. Bernoulli distribution) means ##
+
+# add fitted values (Conditional distibution means)
+fits <- d_pass %>%
+  add_fitted_draws(mod_noint)
+
+# add predictions (draws from posterior predictive distribution)
+preds <- d_pass %>%
+  add_predicted_draws(mod_noint)
+
+# set up showtext
+showtext_auto()
+showtext_opts(dpi = 300)
+
+ppc_fig <- d_pass %>%
+  ggplot(aes(x = fct_reorder(scenario, as.numeric(is_acceptable),
+                             .fun = "mean", .desc = TRUE),
+             y = as.numeric(is_acceptable))) +
+  stat_summary(fun = mean, col = "black", shape = 15, size = 0.25) +
+  stat_slab(aes(y = .value, fill = scenario), data = fits, alpha = 0.5, position = position_nudge(x = -.25)) +
+  stat_pointinterval(aes(y = .value, fill = scenario), data = fits, 
+                     point_interval = mean_qi, .width = c(.50), position = position_nudge(x = -.25), size = 0.25) +  
+  stat_summary(aes(y = .prediction), data = preds, fun = mean, position = position_nudge(x = .25), shape = 17, col = "black", size = 0.25) +
+  xlab("Scenario") +
+  ylab("Proportion acceptable") +
+  coord_flip() +
+  scale_fill_d3(palette = "category20c") +
+  #scale_colour_d3(palette = "category20c") +
+  theme_pubr() +
+  theme(legend.position = "none",
+        text = element_text(family = "Myriad Pro", size = 8))
+
+ppc_fig
+
+###  Dual graph with PPC and posteriors of fixed effects ###
+cowplot::plot_grid(postINT, ppc_fig, ncol = 2, rel_widths = c(3, 4), labels = 'AUTO')
+ggsave("modCOMB.png", width = 7, height = 3.5, units = "in", dpi = 300)
+showtext_auto(FALSE)
+
+```
+
+
+## PREDICTIVE MODELING
+
+### set up
+
+```{r pred-setup}
+#set seed
+set.seed(8904)
+
+# split data into training (80%) and testing (20%) set by group, 
+#so that ps not trained on and tested - want model to generalize to new people
+a <- groupKFold(d_pass$ResponseId, k = 5)$Fold1
+training <- d_pass[a,]
+test <- d_pass[-a,]
+
+## make test$is.acceptable a factor
+test$is_acceptable <- factor(test$is_acceptable)
+
+```
+
+## Model 1. training on mixed model, but dropping random effects for prediction
+
+```{r pred-mod1}
+# fit model to training data
+mod1 <- glmer(formula_noint_allrand, data = training, family = binomial(link = "logit"), 
+              control= glmerControl(optimizer="bobyqa", optCtrl=list(maxfun=2e5)))
+
+# get and analyse predictions on test data
+
+test$mod1_prob <- predict(mod1, test, re.form = NA, type = "response")
+test$mod1_class <- ifelse(test$mod1_prob >= .50, TRUE, FALSE) %>% factor()
+
+confusionMatrix(test$mod1_class, test$is_acceptable) # get accuracy etc
+
+
+```
+  
+## Model 2. Ordinary GLM
+
+```{r pred-mod2}
+# get formula
+formula_noint <- paste0("is_acceptable ~ ", main_effects)
+
+# fit model to training data
+mod2 <- glm(formula_noint, data = training, family = binomial(link = "logit"))
+
+# get and analyse predictions on test data
+test$mod2_prob <- predict(mod2, test, type = "response")
+test$mod2_class <- ifelse(test$mod2_prob >= .50, TRUE, FALSE) %>% factor()
+
+confusionMatrix(test$mod2_class, test$is_acceptable) # get accuracy etc
+
+
+```
+
+## Model 3. Elastic net Logistic Regression
+
+```{r pred-mod3}
+# make training$is.acceptable a factor
+training$is_acceptable <- factor(training$is_acceptable)
+
+train_control <- trainControl(method = "repeatedcv",
+                              number = 10,
+                              repeats = 5,
+                              search = "grid")
+
+# Train the model
+mod3 <- train(form = as.formula(formula_noint),
+                           data = training,
+                           method = "glmnet",
+                           family = "binomial",
+                           tuneGrid = expand.grid(
+                                        .alpha = seq(0, 1, by = 0.05),
+                                        .lambda = seq(0, 2, by = 0.05)),
+                           trControl = train_control)
+
+mod3
+
+
+test$mod3_prob <- predict(mod3, newdata = test, type = "prob")$`TRUE`
+test$mod3_class <- ifelse(test$mod3_prob >= .50, TRUE, FALSE) %>% factor()
+
+confusionMatrix(test$mod3_class, test$is_acceptable) # get accuracy etc
+
+```
+
+#Session info
+```{r sessinfo}
+devtools::session_info()
+```
