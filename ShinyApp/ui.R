@@ -170,7 +170,7 @@ shinyUI(
      
      p("Then, to transform this to a probability that the project is judged acceptable, we apply the logistic function:"),
   
-     p("$$ \\hat{P}_{Acceptable} = \\frac{1}{1 + e^{\\eta}} $$")
+     p("$$ \\hat{P}_{Acceptable} = \\frac{1}{1 + e^{-\\eta}} $$")
      
   )
 )

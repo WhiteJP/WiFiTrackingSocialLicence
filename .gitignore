@@ -43,7 +43,7 @@ vignettes/*.pdf
 
 # Shiny token, see https://shiny.rstudio.com/articles/shinyapps.html
 *deploy.R
-*rsconnect*
+ShinyApp/rsconnect*
 
 # image file to save pngs from analysis. 
 images/

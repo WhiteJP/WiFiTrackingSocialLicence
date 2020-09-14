@@ -5,6 +5,6 @@ account: whitejp
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 2700551
-bundleId: 3626599
+bundleId: 3626951
 url: https://whitejp.shinyapps.io/lumas-predictive-model/
-when: 1600071884.82894
+when: 1600081055.54493
