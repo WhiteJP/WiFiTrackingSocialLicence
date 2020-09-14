@@ -1,7 +1,7 @@
 ---
 title: "LUMAS-analysis"
 author: "Josh White"
-date: "8/09/2020"
+date: "15/09/2020"
 output: 
     html_document:
         fig_retina: 1
@@ -11,22 +11,20 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, cache = TRUE, message = FALSE, dpi = 300)
                       
-library(tidyverse) # to read, maniuplate and graph data
+library(tidyverse) # to read, manipulate and graph data
 
 # for modeling
 library(lme4) # for frequentist models
 library(brms) # for Bayesian models
 library(caret) # for cross validation 
 library(glmnet) # for regularisation (ElasticNet)
-library(performance)
+library(performance) # for ConfusionMatrix function
 
 library(psych) # for logit function to get ROPE value
 library(bayestestR) # for % in ROPE calculations
 
-#library(PerformanceAnalytics)
-
 # for visualisation
-library(ggpubr)
+library(ggpubr) # for theme
 library(ggsci) # for colour schemes
 library(ggthemes)  # for colour schemes
 library(ggsignif) # for significance bars on graphs. 
@@ -38,7 +36,8 @@ library(showtext) # to use custom fonts
 # set base theme
 theme_set(theme_pubr())
 
-# install adone myriad font
+# install adobe myriad font
+# Code will still run without this font installed. 
 font_paths("C:\\Users\\joshu\\AppData\\Local\\Microsoft\\Windows\\Fonts")
 
 font_add("Myriad Pro",
@@ -56,45 +55,42 @@ set.seed(87643)
 ## Load Packages and set seed for reproducibility
 
 ```{r load-packages, eval = FALSE}
-library(tidyverse)
-library(readr)
-library(lme4)
-library(lmerTest)
-library(brms)
-library(skimr)
-library(qpcR) # for akaike.weights function
-library(lubridate)
-library(ltm)
-library(psych)
-library(PerformanceAnalytics)
-library(corrplot)
-library(Hmisc)
-library(purrr)
-library(performance) # for icc function
-library(caret) # for confusion matrix
-library(pracma) # for fminsearch
-library(bayesplot)
+library(tidyverse) # to read, manipulate and graph data
 
-library(likert)
-library(ggthemes)
-library(ggpubr)
-library(ggsci)
-library(tidybayes)
-library(modelr)
-library(tidytext) # for ordering within facets
+# for modeling
+library(lme4) # for frequentist models
+library(brms) # for Bayesian models
+library(caret) # for cross validation 
+library(glmnet) # for regularisation (ElasticNet)
+library(performance) # for ConfusionMatrix function
 
+library(psych) # for logit function to get ROPE value
+library(bayestestR) # for % in ROPE calculations
+
+# for visualisation
+library(ggpubr) # for theme
+library(ggsci) # for colour schemes
+library(ggthemes)  # for colour schemes
+library(ggsignif) # for significance bars on graphs. 
+library(tidybayes) # for using and graphing mcmc draws in tidy format
+library(bayesplot) # for plotting diagnostic graphs. 
+library(tidytext) # for function to order factors within facets 
+library(showtext) # to use custom fonts 
+
+# set base theme
 theme_set(theme_pubr())
 
-# install myriad
+# install adobe myriad font
 font_paths("C:\\Users\\joshu\\AppData\\Local\\Microsoft\\Windows\\Fonts")
 
 font_add("Myriad Pro",
        regular = "MyriadPro-Regular.otf",
-        bold = "MyriadPro-Bold.otf",
-         italic = "MyriadPro-It.otf" ,
-         bolditalic = "MyriadPro-BoldIt.otf")
+       bold = "MyriadPro-Bold.otf",
+       italic = "MyriadPro-It.otf" ,
+       bolditalic = "MyriadPro-BoldIt.otf")
 
 set.seed(87643)
+
 ```
 
 ## Import Data
@@ -217,7 +213,7 @@ d_pass_long %>% ggplot(aes(x = fct_reorder(scenario, as.numeric(is_acceptable), 
         text = element_text(family = "Myriad Pro", size = theme.size)) +
   scale_y_continuous(name = "Proportion Acceptable",limits = c(0, 1))+
   coord_flip()
-ggsave("acceptbyscen.png", width = 5, height = 2.5, units = "in", dpi = 300)
+ggsave("images/acceptbyscen.png", width = 5, height = 2.5, units = "in", dpi = 300)
 ```
 
 ```{r graph-privdim, fig.height = 9, fig.width = 7.3}
@@ -236,7 +232,7 @@ facet_labels <- c(`Decline difficulty` = "Decline difficulty\n(0 = ‘Extremely 
                  `Data control` = "Data control\n(0 = ‘No control at all’\n5 = ‘Complete control’)", 
                  `Respect for privacy` = "Respect for privacy\n(0 = ‘Not at all’\n5 = ‘Extremely’)")
 
-# boxplot of privcy dimension ratings by each scenario
+# boxplot of privacy dimension ratings by each scenario
 d_pass_long %>% ggplot(aes(x = reorder_within(scenario, rating, dimension), y = rating, 
                            colour = scenario, shape = scenario, group = interaction(scenario, dimension))) +
   geom_boxplot(outlier.size = 0.75, size = 0.75, alpha = 0.5) +
@@ -261,7 +257,7 @@ d_pass_long %>% ggplot(aes(x = reorder_within(scenario, rating, dimension), y = 
   facet_wrap(~dimension, ncol = 3, scales = "free_y", labeller = as_labeller(facet_labels)) +
   xlab("") +
   ylab("Likert rating (0-5)")
-ggsave("dimbyscenbox.png", width = 7.3, height = 9, units = "in", dpi = 300)
+ggsave("images/dimbyscenbox.png", width = 7.3, height = 9, units = "in", dpi = 300)
 
 
 # boxplot of privacy ratings for each scenario by ratings
@@ -289,7 +285,7 @@ d_pass_long %>% ggplot(aes(x = reorder_within(scenario, rating, dimension), y = 
   facet_wrap(~scenario, ncol = 3, scales = "free_y") +
   xlab("") +
   ylab("Likert rating (0-5)")
-ggsave("scenbydimbox.png", width = 7.3, height = 9, units = "in", dpi = 300)
+ggsave("images/scenbydimbox.png", width = 7.3, height = 9, units = "in", dpi = 300)
 
 #close showtext
 showtext_auto(FALSE)
@@ -331,7 +327,7 @@ relunimelb <- counts %>% ggplot(aes(x = rel_to_unimelb, y = percentage, fill = s
       legend.title = element_blank(),
       legend.position = c(.75, .8),
       legend.key.size = unit(.5, "cm")) 
-ggsave("demo-relunimelb.png", width = 3.5, height = 3.5, units = "in", dpi = 300)
+ggsave("images/demo-relunimelb.png", width = 3.5, height = 3.5, units = "in", dpi = 300)
 ```
 
 ```{r descbydem, fig.height = 7.5, fig.width = 5}
@@ -344,7 +340,7 @@ d_pass <- d_pass %>%
     breaks = c(16.5, 24.5, 34.5, 44.5, 54.5, 64.5), 
     labels = c("17-24","25-34", "35-44", "45-54", "55-64")))
 
-### get datset with proportion of acceptance for each participant (0, .33, .66, 1)
+### get dataset with proportion of acceptance for each participant (0, .33, .66, 1)
 meanaccept <- d_pass %>% group_by(ResponseId) %>% summarise(mean = mean(is_acceptable),
                                               age = age[1],
                                               age_group = age_group[1],
@@ -357,14 +353,14 @@ lm(mean ~ age, data = meanaccept) %>% summary() # age, continuous
 lm(mean ~ age_group, data = meanaccept) %>% aov %>% summary() # age, binned
 lm(mean ~ gender, data = meanaccept) %>% aov %>% summary()  # gender
 lm(mean ~ rel_to_unimelb, data = meanaccept) %>% aov %>% summary() # relationship to unimelb
-lm(mean ~ education, data = meanaccept) %>% aov %>% summary() #eductaional attainment
+lm(mean ~ education, data = meanaccept) %>% aov %>% summary() #educational attainment
 
 
 ### GRAPHS OF PROPTION ACCEPTANCE BY DEMOGRAPHIC VARIABLES ###
 
 #set global options for graphs
 fillcol <- "lightblue"
-ypos <- c(0.925) #ypos for ggsignif
+ypos <- c(0.925) #y position for ggsignif
 
 #open 
 showtext_auto()
@@ -374,7 +370,6 @@ showtext_opts(dpi = 300)
 gender_acc <- meanaccept %>% drop_na(gender) %>% ggplot(aes(x = gender, y = mean)) + 
   stat_summary(geom = "bar", fun = mean, col = "black", fill = fillcol) +
   stat_summary(geom = "errorbar", fun.data = mean_se, col = "black", width = .5) +
-  #EnvStats::stat_n_text(y.pos = 0.1, size = geom.text.size, family = "Myriad Pro") +
   stat_summary(fun = function(x){return(0.1)}, fun.max = length,
                geom = "text", aes(label = ..max..), size = geom.text.size)   +
   theme_pubr() +
@@ -386,7 +381,7 @@ gender_acc <- meanaccept %>% drop_na(gender) %>% ggplot(aes(x = gender, y = mean
                         y_position = ypos,
                         textsize = geom.text.size, vjust = 0) +
   theme(text = element_text(family = "Myriad Pro", size = 8)) 
-ggsave("demoacc-gen.png", width = 2.5, height = 2.5, units = "in", dpi = 300)
+ggsave("images/demoacc-gen.png", width = 2.5, height = 2.5, units = "in", dpi = 300)
 
 
 #EDUCATION
@@ -408,7 +403,7 @@ edu_acc <- meanaccept %>% drop_na(education) %>%
                         annotations = c("N.S."),
                         y_position = ypos,
                         textsize = geom.text.size, vjust = 0)
-ggsave("demoacc-edu.png", width = 2.5, height = 2.5, units = "in", dpi = 300)
+ggsave("images/demoacc-edu.png", width = 2.5, height = 2.5, units = "in", dpi = 300)
 
 #AGE
 age_acc <- meanaccept %>% drop_na(age_group) %>% ggplot(aes(x = age_group, y = mean)) + 
@@ -428,7 +423,7 @@ age_acc <- meanaccept %>% drop_na(age_group) %>% ggplot(aes(x = age_group, y = m
                         annotations = c("N.S."),
                         y_position = ypos,
                         textsize = geom.text.size, vjust = 0)
-ggsave("demoacc-age.png", width = 2.5, height = 2.5, units = "in", dpi = 300)
+ggsave("images/demoacc-age.png", width = 2.5, height = 2.5, units = "in", dpi = 300)
 
 relunimelb_acc <- meanaccept %>% drop_na(rel_to_unimelb) %>%
   #filter(rel_to_unimelb != "Other employee" & rel_to_unimelb != "Other") %>% 
@@ -449,13 +444,13 @@ relunimelb_acc <- meanaccept %>% drop_na(rel_to_unimelb) %>%
                         annotations = c("N.S."),
                         y_position = ypos,
                         textsize = geom.text.size, vjust = 0)
-ggsave("demoacc-reltounimelb.png", width = 2.5, height = 2.5, units = "in", dpi = 300)
+ggsave("images/demoacc-reltounimelb.png", width = 2.5, height = 2.5, units = "in", dpi = 300)
 
 #combine into one graph
 top <- cowplot::plot_grid(age_acc, gender_acc, edu_acc, relunimelb_acc, ncol = 2, labels = "AUTO", vjust = 1.01)
 bot <- cowplot::plot_grid(NULL, relunimelb, NULL, ncol = 3, labels = c("", "E", ""), rel_widths = c(1,2,1), vjust = 1.01) 
 cowplot::plot_grid(top, bot, ncol = 1, rel_heights = c(2, 1))
-ggsave("demoBIG.png", width = 5, height = 7.5, units = "in", dpi = 300)
+ggsave("images/demoBIG.png", width = 5, height = 7.5, units = "in", dpi = 300)
 
 #showtextoff
 showtext_auto(FALSE)
@@ -477,7 +472,7 @@ d_pass %>% dplyr::select(age, decline_difficulty:respect_for_privacy) %>%
 
 
 ### pre-prepare formulas ###
-main_effects <- paste0(colnames(d_pass)[5:15], collapse = " + ")
+main_effects <- paste0(colnames(d_pass)[4:14], collapse = " + ")
 random_effects <- "(1|scenario) + (1|ResponseId)"
 interactions <- "private_benefit*participant_benefit*public_benefit + risk_of_harm:decline_difficulty + risk_of_harm:ongoing_control + 
                  security:sensitivity + sensitivity:ongoing_control + trust:sensitivity + trust:risk_of_harm + trust:security"
@@ -553,7 +548,7 @@ summary(mod_int)
 # add loo to model objects
 mod_noint <- add_criterion(mod_noint, "loo") 
 mod_int <- add_criterion(mod_int, "loo") 
-str(mod_noint)
+
 # compare stats
 bayes.comp.loo <- loo_compare(mod_noint, mod_int, criterion = "loo") # compare models
 
@@ -567,7 +562,7 @@ mods <- list(mod_noint, mod_int)
 
 ```
 
-## Analysing effects
+### Analysing effects
 
 ``` {r fixedeffects}
 
@@ -627,7 +622,7 @@ postINT <- mod_noint %>%
                              "Trust", "Respect for privacy")))
   #geom_text(aes(x = 0.005, y = Parameter, label = ROPE_Percentage), data = rope_perc, vjust = -.5) #- to add percentage in ROPE to graph
 postINT
-ggsave("posteriorsINT.png", width = 3.5, height = 3.5, units = "in", dpi = 300)
+ggsave("images/posteriorsINT.png", width = 3.5, height = 3.5, units = "in", dpi = 300)
 
 ## GRAPH RANDOM EFFECT POSTERIORS ##
 
@@ -650,7 +645,7 @@ randscen <- mod_noint %>%
   theme_pubr() +
   theme(text = element_text(family = "Myriad Pro", size = 8)) +
   geom_vline(xintercept = 0, linetype = "dashed") 
-ggsave("randposteriorsscen.png", width = 5, height = 5, units = "in", dpi = 300)
+ggsave("images/randposteriorsscen.png", width = 5, height = 5, units = "in", dpi = 300)
 
 ## Participant
 randpart <- mod_noint %>%
@@ -666,20 +661,20 @@ randpart <- mod_noint %>%
   theme(text = element_text(family = "Myriad Pro", size = 8),
         axis.text.y = element_blank()) +
   geom_vline(xintercept = 0, linetype = "dashed") 
-ggsave("randposteriorspart.png", width = 5, height = 9, units = "in", dpi = 300)
+ggsave("images/randposteriorspart.png", width = 5, height = 9, units = "in", dpi = 300)
   
 # JOIN GRAPHs together 
 cowplot::plot_grid(randscen, randpart, ncol = 2, rel_widths = c(3, 2), labels = 'AUTO', hjust = 0)
-ggsave("randCOMB.png", width = 7, height = 5, units = "in", dpi = 300)
+ggsave("images/randCOMB.png", width = 7, height = 5, units = "in", dpi = 300)
 
 #turn off showtext
 showtext_auto(FALSE)
 
 ```
 
-## Model diagnostics
+### Model diagnostics
 
-### Traceplots, rhat, ESS etc. 
+#### Traceplots, rhat, ESS etc. 
 
 Analysis of various diagnostic plots show that: 
 
@@ -725,7 +720,7 @@ mcmc_acf(mod_noint, pars = vars(b_risk_of_harm:sd_scenario__Intercept))  + facet
 
 ```
 
-### Posterior Predictive Checks
+#### Posterior Predictive Checks
 
 Posterior predictive checks show the model is well specified. 
 
@@ -792,11 +787,10 @@ ppc_fig
 
 ###  Dual graph with PPC and posteriors of fixed effects ###
 cowplot::plot_grid(postINT, ppc_fig, ncol = 2, rel_widths = c(3, 4), labels = 'AUTO')
-ggsave("modCOMB.png", width = 7, height = 3.5, units = "in", dpi = 300)
+ggsave("images/modCOMB.png", width = 7, height = 3.5, units = "in", dpi = 300)
 showtext_auto(FALSE)
 
 ```
-
 
 ## PREDICTIVE MODELING
 
@@ -817,16 +811,16 @@ test$is_acceptable <- factor(test$is_acceptable)
 
 ```
 
-## Model 1. training on mixed model, but dropping random effects for prediction
+### Model 1. training on mixed model, but dropping random effects for prediction
 
 ```{r pred-mod1}
 # fit model to training data
-mod1 <- glmer(formula_noint_allrand, data = training, family = binomial(link = "logit"), 
-              control= glmerControl(optimizer="bobyqa", optCtrl=list(maxfun=2e5)))
+mod1 <- glmer(formula_noint, data = training, family = binomial(link = "logit"), 
+              control = glmerControl(optimizer = "bobyqa", 
+                                     optCtrl = list(maxfun=2e5)))
 
 # get and analyse predictions on test data
-
-test$mod1_prob <- predict(mod1, test, re.form = NA, type = "response")
+test$mod1_prob <- predict(mod1, newdata = test, re.form = NA, type = "response")
 test$mod1_class <- ifelse(test$mod1_prob >= .50, TRUE, FALSE) %>% factor()
 
 confusionMatrix(test$mod1_class, test$is_acceptable) # get accuracy etc
@@ -834,14 +828,14 @@ confusionMatrix(test$mod1_class, test$is_acceptable) # get accuracy etc
 
 ```
   
-## Model 2. Ordinary GLM
+### Model 2. Ordinary GLM
 
 ```{r pred-mod2}
 # get formula
-formula_noint <- paste0("is_acceptable ~ ", main_effects)
+formula_noint_glm <- paste0("is_acceptable ~ ", main_effects)
 
 # fit model to training data
-mod2 <- glm(formula_noint, data = training, family = binomial(link = "logit"))
+mod2 <- glm(formula_noint_glm, data = training, family = binomial(link = "logit"))
 
 # get and analyse predictions on test data
 test$mod2_prob <- predict(mod2, test, type = "response")
@@ -852,7 +846,7 @@ confusionMatrix(test$mod2_class, test$is_acceptable) # get accuracy etc
 
 ```
 
-## Model 3. Elastic net Logistic Regression
+### Model 3. Elastic net Logistic Regression
 
 ```{r pred-mod3}
 # make training$is.acceptable a factor
@@ -864,7 +858,7 @@ train_control <- trainControl(method = "repeatedcv",
                               search = "grid")
 
 # Train the model
-mod3 <- train(form = as.formula(formula_noint),
+mod3 <- train(form = as.formula(formula_noint_glm),
                            data = training,
                            method = "glmnet",
                            family = "binomial",
@@ -875,7 +869,6 @@ mod3 <- train(form = as.formula(formula_noint),
 
 mod3
 
-
 test$mod3_prob <- predict(mod3, newdata = test, type = "prob")$`TRUE`
 test$mod3_class <- ifelse(test$mod3_prob >= .50, TRUE, FALSE) %>% factor()
 
@@ -883,7 +876,15 @@ confusionMatrix(test$mod3_class, test$is_acceptable) # get accuracy etc
 
 ```
 
-#Session info
+### Print summary of best model
+
+```{r best-model1}
+summary(mod1)
+
+```
+
+# Session info
+
 ```{r sessinfo}
 devtools::session_info()
 ```

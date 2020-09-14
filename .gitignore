@@ -31,6 +31,9 @@ vignettes/*.pdf
 *_cache/
 /cache/
 
+# Rmarkdownfiles
+*_files/
+
 # Temporary files created by R markdown
 *.utf8.md
 *.knit.md
@@ -38,8 +41,8 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 
-# shiny_app
-ShinyApp/*
-
 # Shiny token, see https://shiny.rstudio.com/articles/shinyapps.html
-rsconnect/
+*deploy.R
+
+# image file to save pngs from analysis. 
+images/

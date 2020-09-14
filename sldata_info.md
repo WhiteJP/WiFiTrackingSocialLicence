@@ -10,17 +10,17 @@ For more information on the data and the experimental paradigm leading to its co
 
 `scenario` -- The scenario presented to the participant. Note, each particpant was shown three scenarios. Coded as follows:
 
-  1. Work Records
-  2. Memory for Where
-  3. Serving you Better
-  4. Safe Campus
-  5. Student Well-being Project
-  6. Project Move
-  7. Project TRIIBE
-  8. Project QueueSense
-  9. Project Fluloc
-  10. Project Precinct Change Management
-  11. Academic Performance
+  1. 'Work Records'
+  2. 'Memory for Where'
+  3. 'Serving you Better'
+  4. 'Safe Campus'
+  5. 'Student Well-being Project'
+  6. 'Project Move'
+  7. 'Project TRIIBE'
+  8. 'Project QueueSense'
+  9. 'Project Fluloc'
+  10. 'Project Precinct Change Management'
+  11. 'Academic Performance'
 
 `scenario_check` -- Participant response to attention / comprehension check question. Answer coded to  correspond to the scenario to which it relates. For participants to pass the attention check the value in `scenario` and `scenario_check` must be the same for each of their 3 scenarios. 
 
@@ -46,7 +46,7 @@ For more information on the data and the experimental paradigm leading to its co
 
 `trust` -- "How much do you trust the sponsor of the proposed research?"	<br> Responses: 0 = ‘Not at all’, 5 = ‘Extremely’.
 
-`datasecurity` --	"How secure is the data that would be collected from the proposed research?"	<br> Responses: 0 = ‘Not at all secure’, 5 = ‘Extremely secure’.
+`security` --	"How secure is the data that would be collected from the proposed research?"	<br> Responses: 0 = ‘Not at all secure’, 5 = ‘Extremely secure’.
 
 `ongoing_control` -- "To what extent do participants have ongoing control of their data? This includes controlling how and when data is collected, and having access to view and delete data after it is collected." 
 <br> Responses: 0 = ‘No control at all’, 5 = ‘Complete Control’.
@@ -59,12 +59,14 @@ For more information on the data and the experimental paradigm leading to its co
 `age` –- Self-reported age in years.
 
 `gender` –- Self-reported gender. Coded as: 
+
 1. 'Male'
 2. 'Female'
 3. 'Other'
 4. 'Prefer not to say'.
 
-`rel_to_unimelb` –- self-reported relationship to the University of Melbourne coded as:
+`rel_to_unimelb` –- 'What is your relationship to the University of Melbourne?' Coded as:
+
 1. 'Undergraduate student'
 2. 'Postgraduate student'
 3. 'Academic employee of UniMelb'
@@ -72,19 +74,20 @@ For more information on the data and the experimental paradigm leading to its co
 5. 'Employee of other entity, but work on campus'
 6. 'Other'
 
-`education` -- 'What is the highest level of education that you have completed?' 
-1. Some High School
-2. Completed High School
-3. Some Trade/Professional School (e.g., TAFE)
-4. Completed Trade/Professional School (e.g., TAFE)
-5. Some Undergraduate University/College
-6. Completed Undergraduate University/College
-7. Some Postgraduate University/College
-8. Completed postgraduate University/College
-9. Some Doctoral studies
-10. Completed Doctoral studies
+`education` -- 'What is the highest level of education that you have completed?' Coded as:
+
+1. 'Some High School'
+2. 'Completed High School'
+3. 'Some Trade/Professional School (e.g., TAFE)'
+4. 'Completed Trade/Professional School (e.g., TAFE)'
+5. 'Some Undergraduate University/College'
+6. 'Completed Undergraduate University/College'
+7. 'Some Postgraduate University/College'
+8. 'Completed postgraduate University/College'
+9. 'Some Doctoral studies'
+10. 'Completed Doctoral studies'
 
 ## Other information
 
-Missing data coded as as `NA`
+Missing data coded as `NA`
 
