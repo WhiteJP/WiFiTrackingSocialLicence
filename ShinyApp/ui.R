@@ -17,7 +17,7 @@ shinyUI(
     h1("Predicting the Social Licence of University Tracking-data Analytics", style = "font-family: 'Alata', sans-serif;"),
     
     ## put unimelb logo
-    img(src = "unimelb_logo.png", height = 200, width = 200, align = 'right', style = "margin: 0px 20px 0px 20px"),
+    img(src = "unimelb_logo.png", height = 170, width = 170, align = 'right', style = "margin: 0px 20px 0px 20px"),
     
     # Introductory text
     p("This app allows decision-makers to estimate the community acceptance of new university projects which utilise tracking-data analytics",
@@ -151,26 +151,34 @@ shinyUI(
              
              h2("Prediction", style = "font-family: 'Alata', sans-serif;"),
              
-             h3(HTML(paste0("We estimate that approximately <strong>", span(textOutput("result", inline = TRUE)), "</strong> of the community would accept this project."))),
+             h3(HTML(paste0("We estimate that approximately <strong>", span(textOutput("result", inline = TRUE)), "</strong> of the community would accept this project.")))
              
       )     
     ),
-    
-    # empty paragrph to give som space
-    tags$br(),
-    
-    # horizontal line before the formulas 
-    hr(),
 
-     h4("Formulas", style = "font-family: 'Alata', sans-serif;"),
-    
-     p("First we obtain the log odds, \\( \\eta \\), that the project is judged acceptable given the privacy dimension ratings:"), 
+    fluidRow(
+      column(width = 12,
+            
+        div(style = 'overflow-x: scroll',
+            
+           hr(),
 
-     p("$$ \\eta = -1.36 - 0.15x_{decline \\ difficulty} - 0.12x_{private \\ benefit} +0.27x_{participant \\ benefit} + 0.11x_{public \\> benefit} + -0.06x_{disproportionality} - \\\\ 0.32x_{sensitivity} - 0.31x_{risk \\, of \\, harm} + 0.55x_{trust} + 32x_{security} + 0.18x_{ongoing \\> control} + 0.55x_{respect \\, for \\, privacy} $$"),
-     
-     p("Then, to transform this to a probability that the project is judged acceptable, we apply the logistic function:"),
-  
-     p("$$ \\hat{P}_{Acceptable} = \\frac{1}{1 + e^{-\\eta}} $$")
-     
+           h4("Formulas", style = "font-family: 'Alata', sans-serif;"),
+          
+           p("First, we obtain the log odds, \\( \\eta \\), that the project is judged acceptable given the privacy dimension ratings:"), 
+      
+           p("$$ \\begin{align} 
+             \\eta = & -1.36 - 0.15x_{decline \\ difficulty} - 0.12x_{private \\ benefit} + 0.27x_{participant \\ benefit} \\\\ 
+             & + 0.11x_{public \\> benefit} - 0.06x_{disproportionality} - 0.32x_{sensitivity} - 0.31x_{risk \\, of \\, harm} \\\\
+             & + 0.55x_{trust} + 0.32x_{security} + 0.18x_{ongoing \\> control} + 0.55x_{respect \\, for \\, privacy} 
+             \\end{align} $$"),
+           
+           p("Then, to transform this to a probability that the project is judged acceptable, we apply the logistic function:"),
+        
+           p("$$ \\hat{P}_{Acceptable} = \\frac{1}{1 + e^{-\\eta}} $$")
+         
+        ) 
+      )
+    )
   )
-)
+)     
