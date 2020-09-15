@@ -17,7 +17,7 @@ shinyUI(
     h1("Predicting the Social Licence of University Tracking-data Analytics", style = "font-family: 'Alata', sans-serif;"),
     
     ## put unimelb logo
-    img(src = "unimelb_logo.png", height = 170, width = 170, align = 'right', style = "margin: 0px 20px 0px 20px"),
+    img(src = "unimelb_logo.png", height = 175, width = 175, align = 'right', style = "margin: 0px 20px 0px 20px"),
     
     # Introductory text
     p("This app allows decision-makers to estimate the community acceptance of new university projects which utilise tracking-data analytics",
