@@ -33,6 +33,9 @@ library(bayesplot) # for plotting diagnostic graphs.
 library(tidytext) # for function to order factors within facets 
 library(showtext) # to use custom fonts 
 
+# for descriptives
+library(skimr)
+
 # set base theme
 theme_set(theme_pubr())
 
@@ -294,24 +297,44 @@ showtext_auto(FALSE)
 
 ## Demographics
 
-```{r demo-data, dpi = 300}
+### Get demographic make-up
+
+#### Of original sample
+
+```{r demo-data-orignal}
 
 #create demographic dataframe
-demo_df <- d %>% dplyr::select(ResponseId, age:education) %>% # save only demographic data
+demo_df <- d %>% dplyr::select(ResponseId, age:education) # remove failed attention check
+
+demo_df
+demo_df <- demo_df[rep(c(TRUE, FALSE, FALSE), 314), ] # remove duplicates
+
+#get demographic information
+demo_df %>% skim()
+
+```
+
+#### Of sample after excluding those who failed attention / comprehension check
+
+```{r demo-data- final}
+
+#create demographic dataframe
+demo_df_pass <- d_pass %>% dplyr::select(ResponseId, age:education) %>% # save only demographic data
                 anti_join(failed_attcheck, by = "ResponseId") # remove failed attention check
 
-demo_df <- demo_df[rep(c(TRUE, FALSE, FALSE), 287), ] # remove duplicates
+demo_df_pass <- demo_df_pass[rep(c(TRUE, FALSE, FALSE), 287), ] # remove duplicates
 
+#get demographic information
+demo_df_pass %>% skim()
 
-
-# REL TO UNIMELB
+### REL TO UNIMELB GRAPH ###
   # unimelb population data for comparison (from 2019 annual report)
   unimelb_data <- data.frame(rel_to_unimelb = factor(c("Undergraduate", "Postgraduate", "Academic employee", 
                                                 "Non-academic employee", "Other employee", "Other")),
                              n = c(27682, 27032, 4910, 4470,  0, 0))
   
   # manipulate df to compare sample to population
-  counts <- demo_df %>% count(rel_to_unimelb)
+  counts <- demo_df_pass %>% count(rel_to_unimelb)
   counts <- bind_rows("Sample" = counts, "University Population" = unimelb_data, .id = "source")
   counts <- counts %>% group_by(source) %>% mutate(percentage = n/sum(n))
    
@@ -329,6 +352,8 @@ relunimelb <- counts %>% ggplot(aes(x = rel_to_unimelb, y = percentage, fill = s
       legend.key.size = unit(.5, "cm")) 
 ggsave("images/demo-relunimelb.png", width = 3.5, height = 3.5, units = "in", dpi = 300)
 ```
+
+### Acceptance by demographics
 
 ```{r descbydem, fig.height = 7.5, fig.width = 5}
                                                   
@@ -622,7 +647,7 @@ postINT <- mod_noint %>%
                              "Trust", "Respect for privacy")))
   #geom_text(aes(x = 0.005, y = Parameter, label = ROPE_Percentage), data = rope_perc, vjust = -.5) #- to add percentage in ROPE to graph
 postINT
-ggsave("images/posteriorsINT.png", width = 3.5, height = 3.5, units = "in", dpi = 300)
+ggsave("images/posteriorsINT.png", width = 3.5, height = 5, units = "in", dpi = 300)
 
 ## GRAPH RANDOM EFFECT POSTERIORS ##
 
