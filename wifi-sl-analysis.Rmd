@@ -908,6 +908,75 @@ summary(mod1)
 
 ```
 
+### Finally, try best-fitting model but with monotonic effects that preserve ordinal nature of predictor variables
+
+The model with monotonic effects fits less well than the best-fitting model (i.e., with no interactions) treating the predictor variables as numeric.
+
+```{r monotonic}
+#make all data ordinal
+
+d_pass_ord <- d_pass %>%
+  mutate(across(decline_difficulty:respect_for_privacy, ordered))
+
+formula_noint_mono <- "is_acceptable ~ mo(decline_difficulty) + mo(private_benefit) + mo(participant_benefit) + mo(public_benefit) + mo(disproportionality) + mo(sensitivity) + mo(risk_of_harm) + mo(trust) + mo(security) + mo(ongoing_control) + mo(respect_for_privacy) + (1|ResponseId) + (1|scenario)"
+
+
+mod_noint_mono <- brm(
+  
+  #set formula, data and conditional distribution
+  formula_noint_mono, 
+  data = d_pass, 
+  family = "bernoulli", 
+  
+  #set priors (use default priors for now)
+  #prior = prior(cauchy(0, 2.5), class = "Intercept") + 
+   #       prior(double_exponential(0, .20), class = "b") +
+   #       prior(cauchy(0, 2.5), class = "sd"), 
+   
+  #set options for sampler
+  chains = 4, 
+  cores = 4,
+  iter = 2000, 
+  warmup = 1000, 
+  control = list(adapt_delta = 0.8), 
+   
+  #suppress output updates
+  refresh = 0, open_progress = FALSE
+)
+
+##show summary output
+
+summary(mod_noint_mono)
+
+### COMPARE MODELS ###
+
+#get Nakagawa's R  for both models
+(nakr2_noint <- r2(mod_noint)) 
+(nakr2_int <- r2(mod_int))
+(nakr2_noint_mono <- r2(mod_noint_mono)) 
+
+
+# add loo to model objects
+mod_noint <- add_criterion(mod_noint, "loo") 
+mod_int <- add_criterion(mod_int, "loo") 
+mod_noint_mono <- add_criterion(mod_noint_mono, "loo") 
+
+# compare stats
+bayes.comp.loo <- loo_compare(mod_noint, mod_int, mod_noint_mono, criterion = "loo") # compare models
+
+# show comparison stats
+cbind(bayes.comp.loo) 
+
+## get Bayes and loo_R2
+mods <- list(mod_noint, mod_int, mod_noint_mono)
+
+(mods_loo <- map(mods, function(x) {x$criteria$loo})) # all pareto k estimates are OK, leaving LOO-CV as the best comparison
+
+
+## Model treating variables as interval predicts better out of sample!!! ##
+
+```
+
 # Session info
 
 ```{r sessinfo}
