@@ -29,7 +29,7 @@ shinyUI(
     style = "font-size: 15px; text-align: justify"),
     
     p("At the bottom of this page, we show the formula used to obtain the estimate from the input ratings. ",
-    "For more information on the derivation of this model, please see the full paper here <link paper>.", 
+    "For more information on the derivation of this model, please see the preprint here:", tags$a(href = 'https://psyarxiv.com/9nye8/', ' https://psyarxiv.com/9nye8/'), ".", 
       style = "font-size: 15px"),
     p(HTML(paste0("Further, please find the data and code for this project and this Shiny app at", 
                   tags$a(href = 'https://osf.io/mx948/', ' https://osf.io/mx948/'), ".")), 
